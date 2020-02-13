@@ -68,8 +68,7 @@ postcode_count <- result_saved %>%
   dplyr::filter(!is.na(postcodes)) %>%
   dplyr::group_by(postcodes, member_type) %>%
   dplyr::summarise(value = n()) %>%
-  dplyr::ungroup() %>%
-  dplyr::mutate(value_sc = (value - min(value, na.rm = T)) / (max(value, na.rm = T) - min(value, na.rm = T)))
+  dplyr::ungroup()
 
 
 ### Add population per postcode ----
@@ -110,3 +109,15 @@ postcode_totals <- rbind(rbind(pop_totals, scot_totals), ni_totals)
 ### Combine data ----
 postcode_data <- dplyr::full_join(postcode_count, postcode_totals, by = "postcodes") %>%
   dplyr::filter(!(is.na(postcodes)|is.na(population)))
+
+# Make sure all postcodes and membership types are represented
+all_posts <- expand.grid(postcodes = unique(postcode_data$postcodes),
+                         member_type = unique(postcode_data$member_type)[!is.na(unique(postcode_data$member_type))])
+postcode_all <- dplyr::right_join(postcode_data, all_posts, by = c("postcodes", "member_type")) %>%
+  dplyr::mutate(value = ifelse(is.na(value), 0, value)) %>%
+  dplyr::group_by(postcodes) %>% 
+  dplyr::mutate(population = max(population, na.rm = T)) %>%
+  dplyr::ungroup() %>%
+  dplyr::filter(population > -1)
+
+
