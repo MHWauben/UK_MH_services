@@ -120,7 +120,8 @@ postcode_all <- dplyr::right_join(postcode_data, all_posts, by = c("postcodes", 
   dplyr::mutate(population = max(population, na.rm = T)) %>%
   dplyr::ungroup() %>%
   dplyr::filter(population > -1) %>%
-  dplyr::mutate(memb_percap = values / population)
+  dplyr::mutate(memb_percap = value / population) %>%
+  dplyr::mutate(memb_percap_sc = (memb_percap - min(memb_percap)) / (max(memb_percap) - min(memb_percap)))
 
 ### Get postcode polygons ----
 downloader::download("https://datashare.is.ed.ac.uk/bitstream/handle/10283/2597/GB_Postcodes.zip?sequence=1&isAllowed=y",
@@ -129,6 +130,6 @@ unzip("poly.zip")
 postalDistrict <-  sf::st_read('GB_Postcodes/PostalDistrict.shp')
 postalDistrict$postcodes <- postalDistrict$PostDist
 
-postcode_poly <- st_as_sf(merge(postcode_all, postalDistrict))
+postcode_poly <- st_as_sf(merge(postcode_all %>% filter(member_type == "Status: Registered Member MBACP (Accred)"), postalDistrict))
 
-plot(postcode_poly["memb_percap"])
+plot(postcode_poly["memb_percap_sc"])
