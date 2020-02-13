@@ -8,6 +8,7 @@ library(dplyr)
 library(magrittr)
 library(downloader)
 library(readxl)
+library(sf)
 
 # Pages to scrape
 pages <- seq(0, 37490, 10)
@@ -118,6 +119,16 @@ postcode_all <- dplyr::right_join(postcode_data, all_posts, by = c("postcodes", 
   dplyr::group_by(postcodes) %>% 
   dplyr::mutate(population = max(population, na.rm = T)) %>%
   dplyr::ungroup() %>%
-  dplyr::filter(population > -1)
+  dplyr::filter(population > -1) %>%
+  dplyr::mutate(memb_percap = values / population)
 
+### Get postcode polygons ----
+downloader::download("https://datashare.is.ed.ac.uk/bitstream/handle/10283/2597/GB_Postcodes.zip?sequence=1&isAllowed=y",
+                     dest = "poly.zip", mode = "wb")
+unzip("poly.zip")
+postalDistrict <-  sf::st_read('GB_Postcodes/PostalDistrict.shp')
+postalDistrict$postcodes <- postalDistrict$PostDist
 
+postcode_poly <- st_as_sf(merge(postcode_all, postalDistrict))
+
+plot(postcode_poly["memb_percap"])
