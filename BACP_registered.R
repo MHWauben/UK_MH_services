@@ -111,17 +111,42 @@ postcode_totals <- rbind(rbind(pop_totals, scot_totals), ni_totals)
 postcode_data <- dplyr::full_join(postcode_count, postcode_totals, by = "postcodes") %>%
   dplyr::filter(!(is.na(postcodes)|is.na(population)))
 
+scale_vec <- function(x){
+  return((x - min(x, na.rm = T)) / 
+           (max(x, na.rm = T) - min(x, na.rm = T)))
+}
+
 # Make sure all postcodes and membership types are represented
 all_posts <- expand.grid(postcodes = unique(postcode_data$postcodes),
                          member_type = unique(postcode_data$member_type)[!is.na(unique(postcode_data$member_type))])
+
 postcode_all <- dplyr::right_join(postcode_data, all_posts, by = c("postcodes", "member_type")) %>%
   dplyr::mutate(value = ifelse(is.na(value), 0, value)) %>%
   dplyr::group_by(postcodes) %>% 
-  dplyr::mutate(population = max(population, na.rm = T)) %>%
+  # Disregard type of BACP membership - just add them all together
+  dplyr::summarise(value = sum(value),
+                   population = max(population, na.rm = T)) %>%
   dplyr::ungroup() %>%
   dplyr::filter(population > -1) %>%
+  # Calculate number of counsellors per capita
   dplyr::mutate(memb_percap = value / population) %>%
-  dplyr::mutate(memb_percap_sc = (memb_percap - min(memb_percap)) / (max(memb_percap) - min(memb_percap)))
+  # Transformations because of skew
+  dplyr::mutate(memb_percap_ra = rank(memb_percap),
+                memb_log = log(value),
+                memb_sqrt = sqrt(value),
+                memb_cubrt = log10(value^(1/3)),
+                memb_percap_log = log(memb_percap),
+                memb_percap_sqrt = sqrt(memb_percap),
+                memb_percap_cubrt = log10(memb_percap^(1/3)))
+
+# Scale transformed columns to 0-1 for visualisation
+trans_cols <- c("memb_percap", "memb_percap_ra", 
+                "memb_log", "memb_sqrt", "memb_cubrt",
+                "memb_percap_log", "memb_percap_sqrt", "memb_percap_cubrt")
+postcode_sc <- as.data.frame(apply(postcode_all[, trans_cols], 
+                     2, scale_vec))
+colnames(postcode_sc) <- paste0(trans_cols, "_sc")
+postcode_all <- cbind(postcode_all, postcode_sc)
 
 ### Get postcode polygons ----
 downloader::download("https://datashare.is.ed.ac.uk/bitstream/handle/10283/2597/GB_Postcodes.zip?sequence=1&isAllowed=y",
@@ -130,6 +155,9 @@ unzip("poly.zip")
 postalDistrict <-  sf::st_read('GB_Postcodes/PostalDistrict.shp')
 postalDistrict$postcodes <- postalDistrict$PostDist
 
-postcode_poly <- st_as_sf(merge(postcode_all %>% filter(member_type == "Status: Registered Member MBACP (Accred)"), postalDistrict))
+# Merge and visualise data
+postcode_poly <- st_as_sf(merge(postcode_all, postalDistrict))
 
-plot(postcode_poly["memb_percap_sc"])
+plot(postcode_poly["memb_sqrt_sc"], lty = 0)
+plot(postcode_poly["memb_percap_cubrt_sc"], lty = 0)
+plot(postcode_poly["memb_percap_ra_sc"], lty = 0)
